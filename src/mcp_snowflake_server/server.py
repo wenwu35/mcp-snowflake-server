@@ -42,14 +42,18 @@ class SnowflakeDB:
     def _init_database(self):
         """Initialize connection to the Snowflake database"""
         try:
+            # Create session without setting specific database and schema
             self.session = Session.builder.configs(self.connection_config).create()
-            for component in ["database", "schema", "warehouse"]:
-                self.session.sql(f"USE {component.upper()} {self.connection_config[component].upper()}")
+            
+            # Set initial warehouse if provided, but don't set database or schema
+            if "warehouse" in self.connection_config:
+                self.session.sql(f"USE WAREHOUSE {self.connection_config['warehouse'].upper()}")
+            
             self.auth_time = time.time()
         except Exception as e:
             raise ValueError(f"Failed to connect to Snowflake database: {e}")
 
-    def execute_query(self, query: str) -> list[dict[str, Any]]:
+    def execute_query(self, query: str) -> tuple[list[dict[str, Any]], str]:
         """Execute a SQL query and return results as a list of dictionaries"""
         if not self.session or time.time() - self.auth_time > self.AUTH_EXPIRATION_TIME:
             self._init_database()
@@ -108,17 +112,70 @@ class Tool(BaseModel):
 
 
 # Tool handlers
+async def handle_list_databases(arguments, db, *_):
+    query = "SHOW DATABASES"
+    data, data_id = db.execute_query(query)
+
+    output = {
+        "type": "data",
+        "data_id": data_id,
+        "data": data,
+    }
+    yaml_output = data_to_yaml(output)
+    json_output = json.dumps(output)
+    return [
+        types.TextContent(type="text", text=yaml_output),
+        types.EmbeddedResource(
+            type="resource",
+            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+        ),
+    ]
+
+
+async def handle_list_schemas(arguments, db, *_):
+    if not arguments or "database" not in arguments:
+        raise ValueError("Missing required 'database' parameter")
+    
+    database = arguments["database"]
+    query = f"SHOW SCHEMAS IN DATABASE {database.upper()}"
+    data, data_id = db.execute_query(query)
+
+    output = {
+        "type": "data",
+        "data_id": data_id,
+        "database": database,
+        "data": data,
+    }
+    yaml_output = data_to_yaml(output)
+    json_output = json.dumps(output)
+    return [
+        types.TextContent(type="text", text=yaml_output),
+        types.EmbeddedResource(
+            type="resource",
+            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+        ),
+    ]
+
+
 async def handle_list_tables(arguments, db, *_):
+    if not arguments or "database" not in arguments or "schema" not in arguments:
+        raise ValueError("Missing required 'database' and 'schema' parameters")
+    
+    database = arguments["database"]
+    schema = arguments["schema"]
+
     query = f"""
         SELECT table_catalog, table_schema, table_name, comment 
-        FROM {db.connection_config['database']}.information_schema.tables 
-        WHERE table_schema = '{db.connection_config['schema'].upper()}'
+        FROM {database}.information_schema.tables 
+        WHERE table_schema = '{schema.upper()}'
     """
     data, data_id = db.execute_query(query)
 
     output = {
         "type": "data",
         "data_id": data_id,
+        "database": database,
+        "schema": schema,
         "data": data,
     }
     yaml_output = data_to_yaml(output)
@@ -136,10 +193,16 @@ async def handle_describe_table(arguments, db, *_):
     if not arguments or "table_name" not in arguments:
         raise ValueError("Missing table_name argument")
 
-    split_identifier = arguments["table_name"].split(".")
-    table_name = split_identifier[-1].upper()
-    schema_name = (split_identifier[-2] if len(split_identifier) > 1 else db.connection_config["schema"]).upper()
-    database_name = (split_identifier[-3] if len(split_identifier) > 2 else db.connection_config["database"]).upper()
+    table_spec = arguments["table_name"]
+    split_identifier = table_spec.split(".")
+    
+    # Parse the fully qualified table name
+    if len(split_identifier) < 3:
+        raise ValueError("Table name must be fully qualified as 'database.schema.table'")
+    
+    database_name = split_identifier[0].upper()
+    schema_name = split_identifier[1].upper()
+    table_name = split_identifier[2].upper()
 
     query = f"""
         SELECT column_name, column_default, is_nullable, data_type, comment 
@@ -151,6 +214,9 @@ async def handle_describe_table(arguments, db, *_):
     output = {
         "type": "data",
         "data_id": data_id,
+        "database": database_name,
+        "schema": schema_name,
+        "table": table_name,
         "data": data,
     }
     yaml_output = data_to_yaml(output)
@@ -165,8 +231,12 @@ async def handle_describe_table(arguments, db, *_):
 
 
 async def handle_read_query(arguments, db, write_detector, *_):
+    if not arguments or "query" not in arguments:
+        raise ValueError("Missing query argument")
+        
     if write_detector.analyze_query(arguments["query"])["contains_write"]:
         raise ValueError("Calls to read_query should not contain write operations")
+    
     data, data_id = db.execute_query(arguments["query"])
     output = {
         "type": "data",
@@ -240,11 +310,36 @@ async def main(
 
     all_tools = [
         Tool(
-            name="list_tables",
-            description="List all tables in the Snowflake database",
+            name="list_databases",
+            description="List all available databases in Snowflake",
             input_schema={
                 "type": "object",
                 "properties": {},
+            },
+            handler=handle_list_databases,
+        ),
+        Tool(
+            name="list_schemas",
+            description="List all schemas in a database",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "database": {"type": "string", "description": "Database name to list schemas from"},
+                },
+                "required": ["database"],
+            },
+            handler=handle_list_schemas,
+        ),
+        Tool(
+            name="list_tables",
+            description="List all tables in a specific database and schema",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "database": {"type": "string", "description": "Database name"},
+                    "schema": {"type": "string", "description": "Schema name"},
+                },
+                "required": ["database", "schema"],
             },
             handler=handle_list_tables,
         ),
@@ -253,7 +348,9 @@ async def main(
             description="Get the schema information for a specific table",
             input_schema={
                 "type": "object",
-                "properties": {"table_name": {"type": "string", "description": "Name of the table to describe"}},
+                "properties": {
+                    "table_name": {"type": "string", "description": "Fully qualified table name in the format 'database.schema.table'"},
+                },
                 "required": ["table_name"],
             },
             handler=handle_describe_table,
