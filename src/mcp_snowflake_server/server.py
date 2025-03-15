@@ -113,7 +113,7 @@ class Tool(BaseModel):
 
 # Tool handlers
 async def handle_list_databases(arguments, db, *_):
-    query = "SHOW DATABASES"
+    query = "SELECT DATABASE_NAME FROM INFORMATION_SCHEMA.DATABASES"
     data, data_id = db.execute_query(query)
 
     output = {
@@ -137,7 +137,7 @@ async def handle_list_schemas(arguments, db, *_):
         raise ValueError("Missing required 'database' parameter")
     
     database = arguments["database"]
-    query = f"SHOW SCHEMAS IN DATABASE {database.upper()}"
+    query = f"SELECT SCHEMA_NAME FROM {database.upper()}.INFORMATION_SCHEMA.SCHEMATA"
     data, data_id = db.execute_query(query)
 
     output = {
