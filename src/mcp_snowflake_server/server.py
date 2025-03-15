@@ -44,11 +44,11 @@ class SnowflakeDB:
         try:
             # Create session without setting specific database and schema
             self.session = Session.builder.configs(self.connection_config).create()
-            
+
             # Set initial warehouse if provided, but don't set database or schema
             if "warehouse" in self.connection_config:
                 self.session.sql(f"USE WAREHOUSE {self.connection_config['warehouse'].upper()}")
-            
+
             self.auth_time = time.time()
         except Exception as e:
             raise ValueError(f"Failed to connect to Snowflake database: {e}")
@@ -107,7 +107,10 @@ class Tool(BaseModel):
     name: str
     description: str
     input_schema: dict[str, Any]
-    handler: Callable[[str, dict[str, Any] | None], list[types.TextContent | types.ImageContent | types.EmbeddedResource]]
+    handler: Callable[
+        [str, dict[str, Any] | None],
+        list[types.TextContent | types.ImageContent | types.EmbeddedResource],
+    ]
     tags: list[str] = []
 
 
@@ -115,7 +118,7 @@ class Tool(BaseModel):
 async def handle_list_databases(arguments, db, *_, exclusion_config=None):
     query = "SELECT DATABASE_NAME FROM INFORMATION_SCHEMA.DATABASES"
     data, data_id = db.execute_query(query)
-    
+
     # Filter out excluded databases
     if exclusion_config and "databases" in exclusion_config and exclusion_config["databases"]:
         filtered_data = []
@@ -141,7 +144,9 @@ async def handle_list_databases(arguments, db, *_, exclusion_config=None):
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
             type="resource",
-            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+            resource=types.TextResourceContents(
+                uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+            ),
         ),
     ]
 
@@ -149,11 +154,11 @@ async def handle_list_databases(arguments, db, *_, exclusion_config=None):
 async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
     if not arguments or "database" not in arguments:
         raise ValueError("Missing required 'database' parameter")
-    
+
     database = arguments["database"]
     query = f"SELECT SCHEMA_NAME FROM {database.upper()}.INFORMATION_SCHEMA.SCHEMATA"
     data, data_id = db.execute_query(query)
-    
+
     # Filter out excluded schemas
     if exclusion_config and "schemas" in exclusion_config and exclusion_config["schemas"]:
         filtered_data = []
@@ -180,7 +185,9 @@ async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
             type="resource",
-            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+            resource=types.TextResourceContents(
+                uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+            ),
         ),
     ]
 
@@ -188,7 +195,7 @@ async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
 async def handle_list_tables(arguments, db, *_, exclusion_config=None):
     if not arguments or "database" not in arguments or "schema" not in arguments:
         raise ValueError("Missing required 'database' and 'schema' parameters")
-    
+
     database = arguments["database"]
     schema = arguments["schema"]
 
@@ -198,7 +205,7 @@ async def handle_list_tables(arguments, db, *_, exclusion_config=None):
         WHERE table_schema = '{schema.upper()}'
     """
     data, data_id = db.execute_query(query)
-    
+
     # Filter out excluded tables
     if exclusion_config and "tables" in exclusion_config and exclusion_config["tables"]:
         filtered_data = []
@@ -226,7 +233,9 @@ async def handle_list_tables(arguments, db, *_, exclusion_config=None):
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
             type="resource",
-            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+            resource=types.TextResourceContents(
+                uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+            ),
         ),
     ]
 
@@ -237,11 +246,11 @@ async def handle_describe_table(arguments, db, *_):
 
     table_spec = arguments["table_name"]
     split_identifier = table_spec.split(".")
-    
+
     # Parse the fully qualified table name
     if len(split_identifier) < 3:
         raise ValueError("Table name must be fully qualified as 'database.schema.table'")
-    
+
     database_name = split_identifier[0].upper()
     schema_name = split_identifier[1].upper()
     table_name = split_identifier[2].upper()
@@ -267,7 +276,9 @@ async def handle_describe_table(arguments, db, *_):
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
             type="resource",
-            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+            resource=types.TextResourceContents(
+                uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+            ),
         ),
     ]
 
@@ -275,10 +286,10 @@ async def handle_describe_table(arguments, db, *_):
 async def handle_read_query(arguments, db, write_detector, *_):
     if not arguments or "query" not in arguments:
         raise ValueError("Missing query argument")
-        
+
     if write_detector.analyze_query(arguments["query"])["contains_write"]:
         raise ValueError("Calls to read_query should not contain write operations")
-    
+
     data, data_id = db.execute_query(arguments["query"])
     output = {
         "type": "data",
@@ -291,7 +302,9 @@ async def handle_read_query(arguments, db, write_detector, *_):
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
             type="resource",
-            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+            resource=types.TextResourceContents(
+                uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+            ),
         ),
     ]
 
@@ -337,28 +350,29 @@ async def main(
     # Setup logging
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
-        logger.handlers.append(logging.FileHandler(os.path.join(log_dir, "mcp_snowflake_server.log")))
+        logger.handlers.append(
+            logging.FileHandler(os.path.join(log_dir, "mcp_snowflake_server.log"))
+        )
     if log_level:
         logger.setLevel(log_level)
 
     logger.info("Starting Snowflake MCP Server")
     logger.info("Allow write operations: %s", allow_write)
     logger.info("Excluded tools: %s", exclude_tools)
-    
+
     # Load configuration from file if provided
     config = {}
-    # 
+    #
     if config_file:
         try:
-            with open(config_file, 'r') as f:
+            with open(config_file, "r") as f:
                 config = json.load(f)
                 logger.info(f"Loaded configuration from {config_file}")
         except Exception as e:
             logger.error(f"Error loading configuration file: {e}")
-            raise e
-    
+
     # Merge exclude_patterns from parameters with config file
-    exclusion_config = config.get('exclude_patterns', {})
+    exclusion_config = config.get("exclude_patterns", {})
     if exclude_patterns:
         # Merge patterns from parameters with those from config file
         for key, patterns in exclude_patterns.items():
@@ -366,22 +380,18 @@ async def main(
                 exclusion_config[key].extend(patterns)
             else:
                 exclusion_config[key] = patterns
-    
+
     # Set default patterns if none are specified
     if not exclusion_config:
-        exclusion_config = {
-            "databases": [],
-            "schemas": [],
-            "tables": []
-        }
-    
+        exclusion_config = {"databases": [], "schemas": [], "tables": []}
+
     # Ensure all keys exist in the exclusion config
     for key in ["databases", "schemas", "tables"]:
         if key not in exclusion_config:
             exclusion_config[key] = []
-    
+
     logger.info(f"Exclusion patterns: {exclusion_config}")
-    
+
     db = SnowflakeDB(connection_args)
     server = Server("snowflake-manager")
     write_detector = SQLWriteDetector()
@@ -405,7 +415,10 @@ async def main(
             input_schema={
                 "type": "object",
                 "properties": {
-                    "database": {"type": "string", "description": "Database name to list schemas from"},
+                    "database": {
+                        "type": "string",
+                        "description": "Database name to list schemas from",
+                    },
                 },
                 "required": ["database"],
             },
@@ -430,7 +443,10 @@ async def main(
             input_schema={
                 "type": "object",
                 "properties": {
-                    "table_name": {"type": "string", "description": "Fully qualified table name in the format 'database.schema.table'"},
+                    "table_name": {
+                        "type": "string",
+                        "description": "Fully qualified table name in the format 'database.schema.table'",
+                    },
                 },
                 "required": ["table_name"],
             },
@@ -441,7 +457,9 @@ async def main(
             description="Execute a SELECT query.",
             input_schema={
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "SELECT SQL query to execute"}},
+                "properties": {
+                    "query": {"type": "string", "description": "SELECT SQL query to execute"}
+                },
                 "required": ["query"],
             },
             handler=handle_read_query,
@@ -451,7 +469,12 @@ async def main(
             description="Add a data insight to the memo",
             input_schema={
                 "type": "object",
-                "properties": {"insight": {"type": "string", "description": "Data insight discovered from analysis"}},
+                "properties": {
+                    "insight": {
+                        "type": "string",
+                        "description": "Data insight discovered from analysis",
+                    }
+                },
                 "required": ["insight"],
             },
             handler=handle_append_insight,
@@ -473,7 +496,9 @@ async def main(
             description="Create a new table in the Snowflake database",
             input_schema={
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "CREATE TABLE SQL statement"}},
+                "properties": {
+                    "query": {"type": "string", "description": "CREATE TABLE SQL statement"}
+                },
                 "required": ["query"],
             },
             handler=handle_create_table,
@@ -485,7 +510,9 @@ async def main(
     if not allow_write:
         exclude_tags.append("write")
     allowed_tools = [
-        tool for tool in all_tools if tool.name not in exclude_tools and not any(tag in exclude_tags for tag in tool.tags)
+        tool
+        for tool in all_tools
+        if tool.name not in exclude_tools and not any(tag in exclude_tags for tag in tool.tags)
     ]
 
     logger.info("Allowed tools: %s", [tool.name for tool in allowed_tools])
@@ -531,7 +558,9 @@ async def main(
         return []
 
     @server.get_prompt()
-    async def handle_get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
+    async def handle_get_prompt(
+        name: str, arguments: dict[str, str] | None
+    ) -> types.GetPromptResult:
         raise ValueError(f"Unknown prompt: {name}")
 
     @server.call_tool()
@@ -540,7 +569,11 @@ async def main(
         name: str, arguments: dict[str, Any] | None
     ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
         if name in exclude_tools:
-            return [types.TextContent(type="text", text=f"Tool {name} is excluded from this data connection")]
+            return [
+                types.TextContent(
+                    type="text", text=f"Tool {name} is excluded from this data connection"
+                )
+            ]
 
         handler = next((tool.handler for tool in allowed_tools if tool.name == name), None)
         if not handler:
@@ -548,7 +581,14 @@ async def main(
 
         # Pass exclusion_config to the handler if it's a listing function
         if name in ["list_databases", "list_schemas", "list_tables"]:
-            return await handler(arguments, db, write_detector, allow_write, server, exclusion_config=exclusion_config)
+            return await handler(
+                arguments,
+                db,
+                write_detector,
+                allow_write,
+                server,
+                exclusion_config=exclusion_config,
+            )
         else:
             return await handler(arguments, db, write_detector, allow_write, server)
 
