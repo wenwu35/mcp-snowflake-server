@@ -15,7 +15,8 @@
       "tmp",
       "test",
       "staging",
-      "util"
+      "util",
+      "information_schema"
     ],
     "tables": [
       "backup",
