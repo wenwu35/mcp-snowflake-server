@@ -109,20 +109,20 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
           "/absolute/path/to/mcp_snowflake_server",
           "run",
           "mcp_snowflake_server",
-          "--account",
-          "the_account",
-          "--warehouse",
-          "the_warehouse",
-          "--user",
-          "the_user",
-          "--password",
-          "their_password",
-          "--role",
-          "the_role"
-          "--database",
-          "the_database",
-          "--schema",
-          "the_schema",
+          # "--account",
+          # "the_account",
+          # "--warehouse",
+          # "the_warehouse",
+          # "--user",
+          # "the_user",
+          # "--password",
+          # "their_password",
+          # "--role",
+          # "the_role"
+          # "--database",
+          # "the_database",
+          # "--schema",
+          # "the_schema",
           # Optionally: "--allow_write" (but not recommended)
           # Optionally: "--log_dir", "/absolute/path/to/logs"
           # Optionally: "--log_level", "DEBUG"/"INFO"/"WARNING"/"ERROR"/"CRITICAL"
@@ -130,24 +130,4 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
       ]
   }
 }
-```
-```python
-# Add the server to your claude_desktop_config.json
-{"mcpServers": {
-  "snowflake_local": {
-      "command": "uv",
-      "args": [
-          "--directory",
-          "/Users/wenwu/work/mcp-snowflake-server",
-          "run",
-          "mcp_snowflake_server"
-          
-      ]
-  }
-}}
-```
-
-to test
-```
-uv --directory /Users/wenwu/work/mcp-snowflake-server run mcp_snowflake_server --no-prefetch
 ```

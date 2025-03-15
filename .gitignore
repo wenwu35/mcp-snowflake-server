@@ -7,4 +7,4 @@ src/mcp_snowflake_server/__pycache__
 **/.DS_Store
 # dist
 /venv
-src/temp.py
+src/temp_*.py
