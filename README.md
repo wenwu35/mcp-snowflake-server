@@ -56,51 +56,28 @@ The server offers six core tools:
    - Triggers update of memo://insights resource
 
 
-## Usage with Claude Desktop
+## Usage with Claude Desktop Locally
 
-### Installing via Smithery
+1. Install Claude AI desktop app.
 
-To install Snowflake Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/mcp_snowflake_server):
-
-```bash
-npx -y @smithery/cli install mcp_snowflake_server --client claude
+2. Install `uv` by:
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Installing via UVX
-
-```python
-# Add the server to your claude_desktop_config.json
-"mcpServers": {
-  "snowflake_pip": {
-      "command": "uvx",
-      "args": [
-          "mcp_snowflake_server",
-          "--account",
-          "the_account",
-          "--warehouse",
-          "the_warehouse",
-          "--user",
-          "the_user",
-          "--password",
-          "their_password",
-          "--role",
-          "the_role"
-          "--database",
-          "the_database",
-          "--schema",
-          "the_schema",
-          # Optionally: "--allow_write" (but not recommended)
-          # Optionally: "--log_dir", "/absolute/path/to/logs"
-          # Optionally: "--log_level", "DEBUG"/"INFO"/"WARNING"/"ERROR"/"CRITICAL"
-          # Optionally: "--exclude_tools", "{tool name}", ["{other tool name}"]
-      ]
-  }
-}
+3. Create a `.env` file using the following template
+```
+SNOWFLAKE_USER="XXX@EMAIL.COM"
+SNOWFLAKE_ACCOUNT="XXX"
+SNOWFLAKE_ROLE="XXX"
+SNOWFLAKE_DATABASE="XXX"
+SNOWFLAKE_SCHEMA="XXX"
+SNOWFLAKE_WAREHOUSE="XXX"
+SNOWFLAKE_AUTHENTICATOR="externalbrowser"
 ```
 
-### Installing locally
+4. Add the server to your claude_desktop_config.json
 ```python
-# Add the server to your claude_desktop_config.json
 "mcpServers": {
   "snowflake_local": {
       "command": "uv",
@@ -109,20 +86,6 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
           "/absolute/path/to/mcp_snowflake_server",
           "run",
           "mcp_snowflake_server",
-          # "--account",
-          # "the_account",
-          # "--warehouse",
-          # "the_warehouse",
-          # "--user",
-          # "the_user",
-          # "--password",
-          # "their_password",
-          # "--role",
-          # "the_role"
-          # "--database",
-          # "the_database",
-          # "--schema",
-          # "the_schema",
           # Optionally: "--allow_write" (but not recommended)
           # Optionally: "--log_dir", "/absolute/path/to/logs"
           # Optionally: "--log_level", "DEBUG"/"INFO"/"WARNING"/"ERROR"/"CRITICAL"
