@@ -18,42 +18,55 @@ The server offers six core tools:
 
 #### Query Tools
 - `read_query`
-   - Execute SELECT queries to read data from the database
-   - Input:
-     - `query` (string): The SELECT SQL query to execute
-   - Returns: Query results as array of objects
+  - Execute SELECT queries to read data from the database
+  - Input:
+    - `query` (string): The SELECT SQL query to execute
+  - Returns: Query results as array of objects
 
 - `write_query` (with `--allow-write` flag)
-   - Execute INSERT, UPDATE, or DELETE queries
-   - Input:
-     - `query` (string): The SQL modification query
-   - Returns: `{ affected_rows: number }`
+  - Execute INSERT, UPDATE, or DELETE queries
+  - Input:
+    - `query` (string): The SQL modification query
+  - Returns: `{ affected_rows: number }`
 
 - `create_table` (with `--allow-write` flag)
-   - Create new tables in the database
-   - Input:
-     - `query` (string): CREATE TABLE SQL statement
-   - Returns: Confirmation of table creation
+  - Create new tables in the database
+  - Input:
+    - `query` (string): CREATE TABLE SQL statement
+  - Returns: Confirmation of table creation
 
 #### Schema Tools
+- `list_databases`
+  - Get a list of all databases in the Snowflake instance.
+  - No input required
+  - Returns: Array of database names.
+
+- `list_schemas`
+  - Get a list of all schemas in a specific database.
+  - Input:
+    - `database` (string): Name of the database.
+  - Returns: Array of schema names.
+
 - `list_tables`
-   - Get a list of all tables in the database
-   - No input required
-   - Returns: Array of table names
+  - Get a list of all tables in a specific database and schema.
+  - Input:
+    - `database` (string): Name of the database.
+    - `schema` (string): Name of the schema.
+  - Returns: Array of table metadata.
 
 - `describe-table`
-   - View column information for a specific table
-   - Input:
-     - `table_name` (string): Name of table to describe (can be fully qualified)
-   - Returns: Array of column definitions with names and types
+  - View column information for a specific table
+  - Input:
+    - `table_name` (string): Fully qualified name of table to describe (e.g., `database.schema.table`)
+  - Returns: Array of column definitions with names and types
 
 #### Analysis Tools
 - `append_insight`
-   - Add new data insights to the memo resource
-   - Input:
-     - `insight` (string): data insight discovered from analysis
-   - Returns: Confirmation of insight addition
-   - Triggers update of memo://insights resource
+  - Add new data insights to the memo resource
+  - Input:
+    - `insight` (string): data insight discovered from analysis
+  - Returns: Confirmation of insight addition
+  - Triggers update of memo://insights resource
 
 
 ## Usage with Claude Desktop Locally
