@@ -1,0 +1,41 @@
+{
+  "exclude_patterns": {
+    "databases": [
+      "backup",
+      "temp",
+      "test",
+      "dev"
+    ],
+    "schemas": [
+      "backup",
+      "back_up",
+      "temp",
+      "tmp",
+      "test",
+      "staging",
+      "util"
+    ],
+    "tables": [
+      "backup",
+      "bak",
+      "tmp",
+      "temp",
+      "test",
+      "copy",
+      "old",
+      "archive"
+    ]
+  },
+  "connection": {
+    "account": "your-account",
+    "user": "your-user",
+    "password": "your-password",
+    "warehouse": "your-warehouse",
+    "role": "your-role"
+  },
+  "server_options": {
+    "allow_write": false,
+    "log_level": "INFO",
+    "exclude_tools": []
+  }
+}

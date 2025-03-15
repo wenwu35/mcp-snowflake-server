@@ -112,9 +112,23 @@ class Tool(BaseModel):
 
 
 # Tool handlers
-async def handle_list_databases(arguments, db, *_):
+async def handle_list_databases(arguments, db, *_, exclusion_config=None):
     query = "SELECT DATABASE_NAME FROM INFORMATION_SCHEMA.DATABASES"
     data, data_id = db.execute_query(query)
+    
+    # Filter out excluded databases
+    if exclusion_config and "databases" in exclusion_config and exclusion_config["databases"]:
+        filtered_data = []
+        for item in data:
+            db_name = item.get("DATABASE_NAME", "")
+            exclude = False
+            for pattern in exclusion_config["databases"]:
+                if pattern.lower() in db_name.lower():
+                    exclude = True
+                    break
+            if not exclude:
+                filtered_data.append(item)
+        data = filtered_data
 
     output = {
         "type": "data",
@@ -132,13 +146,27 @@ async def handle_list_databases(arguments, db, *_):
     ]
 
 
-async def handle_list_schemas(arguments, db, *_):
+async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
     if not arguments or "database" not in arguments:
         raise ValueError("Missing required 'database' parameter")
     
     database = arguments["database"]
     query = f"SELECT SCHEMA_NAME FROM {database.upper()}.INFORMATION_SCHEMA.SCHEMATA"
     data, data_id = db.execute_query(query)
+    
+    # Filter out excluded schemas
+    if exclusion_config and "schemas" in exclusion_config and exclusion_config["schemas"]:
+        filtered_data = []
+        for item in data:
+            schema_name = item.get("SCHEMA_NAME", "")
+            exclude = False
+            for pattern in exclusion_config["schemas"]:
+                if pattern.lower() in schema_name.lower():
+                    exclude = True
+                    break
+            if not exclude:
+                filtered_data.append(item)
+        data = filtered_data
 
     output = {
         "type": "data",
@@ -157,7 +185,7 @@ async def handle_list_schemas(arguments, db, *_):
     ]
 
 
-async def handle_list_tables(arguments, db, *_):
+async def handle_list_tables(arguments, db, *_, exclusion_config=None):
     if not arguments or "database" not in arguments or "schema" not in arguments:
         raise ValueError("Missing required 'database' and 'schema' parameters")
     
@@ -170,6 +198,20 @@ async def handle_list_tables(arguments, db, *_):
         WHERE table_schema = '{schema.upper()}'
     """
     data, data_id = db.execute_query(query)
+    
+    # Filter out excluded tables
+    if exclusion_config and "tables" in exclusion_config and exclusion_config["tables"]:
+        filtered_data = []
+        for item in data:
+            table_name = item.get("TABLE_NAME", "")
+            exclude = False
+            for pattern in exclusion_config["tables"]:
+                if pattern.lower() in table_name.lower():
+                    exclude = True
+                    break
+            if not exclude:
+                filtered_data.append(item)
+        data = filtered_data
 
     output = {
         "type": "data",
@@ -289,6 +331,8 @@ async def main(
     log_dir: str = None,
     log_level: str = "INFO",
     exclude_tools: list[str] = [],
+    config_file: str = "runtime_config.json",
+    exclude_patterns: dict = None,
 ):
     # Setup logging
     if log_dir:
@@ -300,7 +344,42 @@ async def main(
     logger.info("Starting Snowflake MCP Server")
     logger.info("Allow write operations: %s", allow_write)
     logger.info("Excluded tools: %s", exclude_tools)
-
+    
+    # Load configuration from file if provided
+    config = {}
+    if config_file:
+        try:
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+                logger.info(f"Loaded configuration from {config_file}")
+        except Exception as e:
+            logger.error(f"Error loading configuration file: {e}")
+    
+    # Merge exclude_patterns from parameters with config file
+    exclusion_config = config.get('exclude_patterns', {})
+    if exclude_patterns:
+        # Merge patterns from parameters with those from config file
+        for key, patterns in exclude_patterns.items():
+            if key in exclusion_config:
+                exclusion_config[key].extend(patterns)
+            else:
+                exclusion_config[key] = patterns
+    
+    # Set default patterns if none are specified
+    if not exclusion_config:
+        exclusion_config = {
+            "databases": [],
+            "schemas": [],
+            "tables": []
+        }
+    
+    # Ensure all keys exist in the exclusion config
+    for key in ["databases", "schemas", "tables"]:
+        if key not in exclusion_config:
+            exclusion_config[key] = []
+    
+    logger.info(f"Exclusion patterns: {exclusion_config}")
+    
     db = SnowflakeDB(connection_args)
     server = Server("snowflake-manager")
     write_detector = SQLWriteDetector()
@@ -465,7 +544,11 @@ async def main(
         if not handler:
             raise ValueError(f"Unknown tool: {name}")
 
-        return await handler(arguments, db, write_detector, allow_write, server)
+        # Pass exclusion_config to the handler if it's a listing function
+        if name in ["list_databases", "list_schemas", "list_tables"]:
+            return await handler(arguments, db, write_detector, allow_write, server, exclusion_config=exclusion_config)
+        else:
+            return await handler(arguments, db, write_detector, allow_write, server)
 
     @server.list_tools()
     async def handle_list_tools() -> list[types.Tool]:
