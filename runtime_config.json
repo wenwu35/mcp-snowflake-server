@@ -1,6 +1,8 @@
 {
   "exclude_patterns": {
     "databases": [
+      "build",
+      "ci",
       "backup",
       "temp",
       "test",

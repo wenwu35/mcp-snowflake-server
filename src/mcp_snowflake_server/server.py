@@ -347,6 +347,7 @@ async def main(
     
     # Load configuration from file if provided
     config = {}
+    # 
     if config_file:
         try:
             with open(config_file, 'r') as f:
@@ -354,6 +355,7 @@ async def main(
                 logger.info(f"Loaded configuration from {config_file}")
         except Exception as e:
             logger.error(f"Error loading configuration file: {e}")
+            raise e
     
     # Merge exclude_patterns from parameters with config file
     exclusion_config = config.get('exclude_patterns', {})
