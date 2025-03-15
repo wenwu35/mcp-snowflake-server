@@ -65,7 +65,7 @@ The server offers six core tools:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-3. Create a `.env` file using the following template
+3. Create a `.env` file using the following template under this dir
 ```
 SNOWFLAKE_USER="XXX@EMAIL.COM"
 SNOWFLAKE_ACCOUNT="XXX"
