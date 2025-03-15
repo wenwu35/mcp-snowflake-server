@@ -25,17 +25,5 @@
       "old",
       "archive"
     ]
-  },
-  "connection": {
-    "account": "your-account",
-    "user": "your-user",
-    "password": "your-password",
-    "warehouse": "your-warehouse",
-    "role": "your-role"
-  },
-  "server_options": {
-    "allow_write": false,
-    "log_level": "INFO",
-    "exclude_tools": []
   }
 }
