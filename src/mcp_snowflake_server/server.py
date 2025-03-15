@@ -213,43 +213,10 @@ async def handle_create_table(arguments, db, _, allow_write, __):
     return [types.TextContent(type="text", text=f"Table created successfully. data_id = {data_id}")]
 
 
-async def prefetch_tables(db: SnowflakeDB, credentials: dict) -> dict:
-    """Prefetch table and column information"""
-    try:
-        logger.info("Prefetching table descriptions")
-        table_results, data_id = db.execute_query(
-            f"""SELECT table_name, comment 
-                FROM {credentials['database']}.information_schema.tables 
-                WHERE table_schema = '{credentials['schema'].upper()}'"""
-        )
-
-        column_results, data_id = db.execute_query(
-            f"""SELECT table_name, column_name, data_type, comment 
-                FROM {credentials['database']}.information_schema.columns 
-                WHERE table_schema = '{credentials['schema'].upper()}'"""
-        )
-
-        tables_brief = {}
-        for row in table_results:
-            tables_brief[row["TABLE_NAME"]] = {**row, "COLUMNS": {}}
-
-        for row in column_results:
-            row_without_table_name = row.copy()
-            del row_without_table_name["TABLE_NAME"]
-            tables_brief[row["TABLE_NAME"]]["COLUMNS"][row["COLUMN_NAME"]] = row_without_table_name
-
-        return tables_brief
-
-    except Exception as e:
-        logger.error(f"Error prefetching table descriptions: {e}")
-        return f"Error prefetching table descriptions: {e}"
-
-
 async def main(
     allow_write: bool = False,
     connection_args: dict = None,
     log_dir: str = None,
-    prefetch: bool = False,
     log_level: str = "INFO",
     exclude_tools: list[str] = [],
 ):
@@ -262,15 +229,14 @@ async def main(
 
     logger.info("Starting Snowflake MCP Server")
     logger.info("Allow write operations: %s", allow_write)
-    logger.info("Prefetch table descriptions: %s", prefetch)
     logger.info("Excluded tools: %s", exclude_tools)
 
     db = SnowflakeDB(connection_args)
     server = Server("snowflake-manager")
     write_detector = SQLWriteDetector()
 
-    tables_info = (await prefetch_tables(db, connection_args)) if prefetch else {}
-    tables_brief = data_to_yaml(tables_info) if prefetch else ""
+    tables_info = {}
+    tables_brief = ""
 
     all_tools = [
         Tool(
@@ -281,7 +247,6 @@ async def main(
                 "properties": {},
             },
             handler=handle_list_tables,
-            tags=["description"],
         ),
         Tool(
             name="describe_table",
@@ -292,7 +257,6 @@ async def main(
                 "required": ["table_name"],
             },
             handler=handle_describe_table,
-            tags=["description"],
         ),
         Tool(
             name="read_query",
@@ -342,8 +306,6 @@ async def main(
     exclude_tags = []
     if not allow_write:
         exclude_tags.append("write")
-    if prefetch:
-        exclude_tags.append("description")
     allowed_tools = [
         tool for tool in all_tools if tool.name not in exclude_tools and not any(tag in exclude_tags for tag in tool.tags)
     ]

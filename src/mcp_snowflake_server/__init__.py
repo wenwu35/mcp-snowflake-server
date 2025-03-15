@@ -98,7 +98,6 @@ def main():
             connection_args=connection_args,
             allow_write=server_args["allow_write"],
             log_dir=server_args["log_dir"],
-            prefetch=server_args["prefetch"],
             log_level=server_args["log_level"],
             exclude_tools=server_args["exclude_tools"],
         )
