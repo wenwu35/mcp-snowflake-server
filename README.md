@@ -131,3 +131,4 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
   }
 }
 ```
+uv --directory /Users/wenwu/work/mcp-snowflake-server run mcp_snowflake_server
