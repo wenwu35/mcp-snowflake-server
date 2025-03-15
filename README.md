@@ -58,7 +58,7 @@ The server offers six core tools:
 
 ## Usage with Claude Desktop Locally
 
-1. Install Claude AI desktop app.
+1. Install [Claude AI Desktop App](https://claude.ai/download)
 
 2. Install `uv` by:
 ```
@@ -76,11 +76,11 @@ SNOWFLAKE_WAREHOUSE="XXX"
 SNOWFLAKE_AUTHENTICATOR="externalbrowser"
 ```
 
-4. Add the server to your claude_desktop_config.json
+4. Add the server to your `claude_desktop_config.json`
 ```python
 "mcpServers": {
   "snowflake_local": {
-      "command": "uv",
+      "command": "/absolute/path/to/uv", # obtained by using `which uv`
       "args": [
           "--directory",
           "/absolute/path/to/mcp_snowflake_server",
