@@ -88,10 +88,10 @@ def main():
 
     assert (
         "database" in connection_args
-    ), 'You must provide the account identifier as "--database" argument or "SNOWFLAKE_DATABASE" environment variable. This MCP server can only operate on a single database.'
+    ), 'You must provide the account identifier as "--database" argument or "SNOWFLAKE_DATABASE" environment variable.'
     assert (
         "schema" in connection_args
-    ), 'You must provide the username as "--schema" argument or "SNOWFLAKE_SCHEMA" environment variable. This MCP server can only operate on a single schema.'
+    ), 'You must provide the username as "--schema" argument or "SNOWFLAKE_SCHEMA" environment variable.'
 
     asyncio.run(
         server.main(

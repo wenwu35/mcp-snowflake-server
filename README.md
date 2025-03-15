@@ -83,13 +83,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 SNOWFLAKE_USER="XXX@EMAIL.COM"
 SNOWFLAKE_ACCOUNT="XXX"
 SNOWFLAKE_ROLE="XXX"
-SNOWFLAKE_DATABASE="XXX"
-SNOWFLAKE_SCHEMA="XXX"
+SNOWFLAKE_DATABASE="XXX" # This doesn't affect the MCP's access scope
+SNOWFLAKE_SCHEMA="XXX"   # This doesn't affect the MCP's access scope
 SNOWFLAKE_WAREHOUSE="XXX"
 SNOWFLAKE_AUTHENTICATOR="externalbrowser"
 ```
+4. Test locally using 
+```
+uv --directory /absolute/path/to/mcp_snowflake_server run mcp_snowflake_server
+```
 
-4. Add the server to your `claude_desktop_config.json`
+5. Add the server to your `claude_desktop_config.json`
 ```python
 "mcpServers": {
   "snowflake_local": {
