@@ -131,8 +131,23 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
   }
 }
 ```
+```python
+# Add the server to your claude_desktop_config.json
+{"mcpServers": {
+  "snowflake_local": {
+      "command": "uv",
+      "args": [
+          "--directory",
+          "/Users/wenwu/work/mcp-snowflake-server",
+          "run",
+          "mcp_snowflake_server"
+          
+      ]
+  }
+}}
+```
 
 to test
 ```
-uv --directory /Users/wenwu/work/mcp-snowflake-server run mcp_snowflake_server
+uv --directory /Users/wenwu/work/mcp-snowflake-server run mcp_snowflake_server --no-prefetch
 ```
