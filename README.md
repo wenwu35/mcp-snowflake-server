@@ -69,12 +69,12 @@ The server offers six core tools:
   - Triggers update of memo://insights resource
 
 
-## Usage Locally with Claude Desktop
+## Usage Locally with `Claude Desktop` or `Cursor`
 
 Below is a quick guide to get started, and a more general and detailed guide can be found [here](https://modelcontextprotocol.io/quickstart/user). 
 
 
-1. Install [Claude AI Desktop App](https://claude.ai/download)
+1. Install [Claude AI Desktop App](https://claude.ai/download) or [Cursor](https://www.cursor.com/downloads)
 
 2. Install `uv` by:
 ```
@@ -99,7 +99,7 @@ SNOWFLAKE_AUTHENTICATOR="externalbrowser"  # Use Okta for authentication
 uv --directory /absolute/path/to/mcp_snowflake_server run mcp_snowflake_server
 ```
 
-6. Add the server to your `claude_desktop_config.json` (Claude -> Settings -> Developer -> Edit Config)
+6. To use `Claude Desktop`: add the server to your `claude_desktop_config.json` (Claude -> Settings -> Developer -> Edit Config), then restart Claude Desktop.
 ```python
 "mcpServers": {
   "snowflake_local": {
@@ -116,4 +116,8 @@ uv --directory /absolute/path/to/mcp_snowflake_server run mcp_snowflake_server
       ]
   }
 }
+```
+7. To use `Cursor`: add the following to your Curser Settings -> MCP -> Add new MCP server -> Command
+```
+/absolute/path/to/uv --directory /absolute/path/to/mcp_snowflake_server run mcp_snowflake_server
 ```
