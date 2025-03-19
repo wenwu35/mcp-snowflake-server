@@ -6,6 +6,7 @@ import time
 import uuid
 from functools import wraps
 from typing import Any, Callable
+import datetime
 
 import mcp.server.stdio
 import mcp.types as types
@@ -61,6 +62,12 @@ class SnowflakeDB:
         logger.debug(f"Executing query: {query}")
         try:
             result = self.session.sql(query).to_pandas()
+            # Convert date and datetime columns to ISO format strings
+            for col in result.columns:
+                if result[col].dtype == 'datetime64[ns]':
+                    result[col] = result[col].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+                elif result[col].dtype == 'object' and result[col].apply(lambda x: isinstance(x, (datetime.date, datetime.datetime))).any():
+                    result[col] = result[col].apply(lambda x: x.isoformat() if x is not None else None)
             result_rows = result.to_dict(orient="records")
             data_id = str(uuid.uuid4())
 
