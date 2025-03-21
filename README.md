@@ -69,7 +69,7 @@ The server offers six core tools:
   - Triggers update of memo://insights resource
 
 
-## Usage Locally with `Claude Desktop` or `Cursor`
+## Local Usage with `Claude Desktop` or `Cursor`
 
 Below is a quick guide to get started, and a more general and detailed guide can be found [here](https://modelcontextprotocol.io/quickstart/user). 
 
