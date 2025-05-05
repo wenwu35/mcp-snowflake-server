@@ -68,8 +68,15 @@ class SQLWriteDetector:
             if token.is_keyword and token.normalized == "WITH":
                 in_cte = True
             elif in_cte:
-                if any(write_kw in token.normalized for write_kw in self.write_keywords):
+                # Check for exact matches rather than substring matches
+                if token.is_keyword and token.normalized in self.write_keywords:
                     return True
+                # Recursively check child tokens if it's a TokenList
+                if isinstance(token, TokenList):
+                    for subtoken in token.flatten():
+                        if (subtoken.ttype in (Keyword, DML, DDL) and 
+                            subtoken.normalized in self.write_keywords):
+                            return True
         return False
 
     def _find_write_operations(self, statement: TokenList) -> Set[str]:
