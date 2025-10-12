@@ -167,13 +167,6 @@ def parse_table_identifier(table_spec: str) -> tuple[list[str], list[str]]:
     return normalized_parts, metadata_parts
 
 
-def quote_identifier(identifier: str) -> str:
-    """Quote an identifier for use in SQL statements."""
-
-    escaped = identifier.replace('"', '""')
-    return f'"{escaped}"'
-
-
 def escape_literal(value: str) -> str:
     """Escape string literals for inclusion in SQL queries."""
 
@@ -186,7 +179,7 @@ def fetch_table_columns(db: SnowflakeDB, metadata_parts: list[str]) -> list[str]
     database, schema, table = metadata_parts
     query = f"""
         SELECT COLUMN_NAME
-        FROM {quote_identifier(database)}.INFORMATION_SCHEMA.COLUMNS
+        FROM {database}.INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = '{escape_literal(schema)}'
           AND TABLE_NAME = '{escape_literal(table)}'
         ORDER BY ORDINAL_POSITION
@@ -282,7 +275,7 @@ async def handle_list_tables(arguments, db, *_, exclusion_config=None):
 
     query = f"""
         SELECT table_catalog, table_schema, table_name, comment 
-        FROM {database}.information_schema.tables 
+        FROM {database.upper()}.information_schema.tables 
         WHERE table_schema = '{schema.upper()}'
     """
     data, data_id = db.execute_query(query)
@@ -422,8 +415,7 @@ async def handle_compare_models(arguments, db, *_):
             + ", ".join(missing_in_compare)
         )
 
-    quoted_columns = [quote_identifier(col) for col in selected_columns]
-    column_list = ", ".join(quoted_columns)
+    column_list = ", ".join(selected_columns)
 
     base_fqn = ".".join(part.upper() for part in base_parts)
     compare_fqn = ".".join(part.upper() for part in compare_parts)
