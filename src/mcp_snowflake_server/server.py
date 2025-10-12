@@ -824,8 +824,8 @@ async def main(
                     },
                     "max_context_chars": {
                         "type": "integer",
-                        "description": "Maximum number of characters to use for context window (default: 50000)",
-                        "default": 50000,
+                        "description": "Maximum number of characters to use for context window (default: 15000)",
+                        "default": 15000,
                         "minimum": 1000,
                     },
                     "column_list": {
