@@ -62,12 +62,30 @@ class SnowflakeDB:
         logger.debug(f"Executing query: {query}")
         try:
             result = self.session.sql(query).to_pandas()
-            # Convert date and datetime columns to ISO format strings
+            
+            # Convert all timestamp/date columns to ISO format strings for JSON serialization
             for col in result.columns:
                 if result[col].dtype == 'datetime64[ns]':
                     result[col] = result[col].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-                elif result[col].dtype == 'object' and result[col].apply(lambda x: isinstance(x, (datetime.date, datetime.datetime))).any():
-                    result[col] = result[col].apply(lambda x: x.isoformat() if x is not None else None)
+                elif result[col].dtype == 'object':
+                    # Handle various timestamp/date types that might be in object columns
+                    def convert_timestamp(x):
+                        if x is None:
+                            return None
+                        elif isinstance(x, (datetime.date, datetime.datetime)):
+                            return x.isoformat()
+                        elif hasattr(x, 'isoformat'):  # Handle Snowflake Timestamp objects
+                            return x.isoformat()
+                        elif hasattr(x, 'strftime'):  # Handle other date-like objects
+                            try:
+                                return x.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+                            except:
+                                return str(x)
+                        else:
+                            return x
+                    
+                    result[col] = result[col].apply(convert_timestamp)
+            
             result_rows = result.to_dict(orient="records")
             data_id = str(uuid.uuid4())
 
