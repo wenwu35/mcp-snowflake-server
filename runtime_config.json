@@ -4,8 +4,7 @@
       "ci",
       "backup",
       "temp",
-      "test",
-      "dev"
+      "test"
     ],
     "schemas": [
       "backup",
@@ -13,8 +12,7 @@
       "temp",
       "tmp",
       "test",
-      "staging",
-      "information_schema"
+      "staging"
     ],
     "tables": [
       "backup",
@@ -22,9 +20,7 @@
       "tmp",
       "temp",
       "test",
-      "copy",
-      "old",
-      "archive"
+      "copy"
     ]
   }
 }
