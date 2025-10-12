@@ -360,6 +360,15 @@ async def handle_compare_models(arguments, db, *_):
     if column_source not in {"base", "comparing"}:
         raise ValueError("column_source must be either 'base' or 'comparing'")
 
+    preview_limit_arg = arguments.get("preview_limit", 30)
+    try:
+        preview_limit = int(preview_limit_arg)
+    except (TypeError, ValueError):
+        raise ValueError("preview_limit must be an integer")
+
+    if preview_limit <= 0:
+        raise ValueError("preview_limit must be greater than 0")
+
     except_columns_arg = arguments.get("except_columns", [])
     if isinstance(except_columns_arg, str):
         except_columns = [except_columns_arg]
@@ -471,6 +480,7 @@ UNION ALL
 SELECT *
 FROM diff_base_only
 ORDER BY 1, 2
+LIMIT {preview_limit}
 """
 
     stats_data, stats_data_id = db.execute_query(stats_query)
@@ -488,7 +498,8 @@ ORDER BY 1, 2
         "stats_data_id": stats_data_id,
         "statistics": stats_row,
         "differences_data_id": differences_data_id,
-        "differences_row_count": len(differences_data),
+        "differences_preview_count": len(differences_data),
+        "differences_preview_limit": preview_limit,
     }
 
     summary_yaml = data_to_yaml(summary_output)
@@ -499,6 +510,8 @@ ORDER BY 1, 2
         "base_model": base_model,
         "comparing_model": comparing_model,
         "difference_rows": differences_data,
+        "preview_limit": preview_limit,
+        "preview_count": len(differences_data),
     }
     differences_json = json.dumps(differences_output)
 
@@ -711,6 +724,12 @@ async def main(
                         "description": "Which model's columns to use for comparison (base or comparing)",
                         "enum": ["base", "comparing"],
                         "default": "base",
+                    },
+                    "preview_limit": {
+                        "type": "integer",
+                        "description": "Maximum number of differing rows to include in the preview",
+                        "default": 30,
+                        "minimum": 1,
                     },
                     "except_columns": {
                         "type": "array",
