@@ -425,8 +425,8 @@ async def handle_compare_models(arguments, db, *_):
     quoted_columns = [quote_identifier(col) for col in selected_columns]
     column_list = ", ".join(quoted_columns)
 
-    base_fqn = ".".join(quote_identifier(part) for part in base_parts)
-    compare_fqn = ".".join(quote_identifier(part) for part in compare_parts)
+    base_fqn = ".".join(part.upper() for part in base_parts)
+    compare_fqn = ".".join(part.upper() for part in compare_parts)
 
     base_cte = f"""
 WITH base_model AS (
