@@ -357,6 +357,41 @@ async def handle_describe_table(arguments, db, *_):
     ]
 
 
+def estimate_row_size(row: dict) -> int:
+    """Estimate the size of a row in characters for context window calculation."""
+    total_size = 0
+    for key, value in row.items():
+        # Add key size
+        total_size += len(str(key))
+        # Add value size (estimate JSON serialization overhead)
+        if value is None:
+            total_size += 4  # "null"
+        elif isinstance(value, (str, int, float, bool)):
+            total_size += len(str(value))
+        else:
+            # For complex objects, estimate JSON serialization size
+            total_size += len(str(value)) * 1.2  # Add 20% overhead for JSON formatting
+    return total_size
+
+
+def calculate_dynamic_limit(sample_rows: list[dict], max_context_chars: int = 15000) -> int:
+    """Calculate dynamic row limit based on estimated row sizes."""
+    if not sample_rows:
+        return 30  # Default fallback
+    
+    # Calculate average row size from sample
+    total_size = sum(estimate_row_size(row) for row in sample_rows)
+    avg_row_size = total_size / len(sample_rows)
+    
+    # Calculate how many rows can fit in the context limit
+    # Reserve some space for metadata and formatting
+    available_chars = max_context_chars * 0.8  # Use 80% of limit for data
+    dynamic_limit = max(1, int(available_chars / avg_row_size))
+    
+    # Apply reasonable bounds
+    return min(max(dynamic_limit, 1), 100)  # Between 1 and 100 rows
+
+
 async def handle_compare_models(arguments, db, *_):
     if not arguments:
         raise ValueError("Missing required arguments: base_model and comparing_model")
@@ -380,24 +415,45 @@ async def handle_compare_models(arguments, db, *_):
     if preview_limit <= 0:
         raise ValueError("preview_limit must be greater than 0")
 
+    # Get max context size from arguments (default 50KB)
+    max_context_chars = arguments.get("max_context_chars", 50000)
+    try:
+        max_context_chars = int(max_context_chars)
+    except (TypeError, ValueError):
+        raise ValueError("max_context_chars must be an integer")
+
     except_columns_arg = arguments.get("except_columns", [])
     if isinstance(except_columns_arg, str):
         except_columns = [except_columns_arg]
     else:
         except_columns = list(except_columns_arg)
 
+    # Get column_list parameter - if provided, use it directly
+    column_list_arg = arguments.get("column_list", [])
+    if isinstance(column_list_arg, str):
+        column_list = [column_list_arg]
+    else:
+        column_list = list(column_list_arg)
+
     base_parts, base_metadata_parts = parse_table_identifier(base_model)
     compare_parts, compare_metadata_parts = parse_table_identifier(comparing_model)
 
+    # Always fetch column lists for validation
     base_columns = fetch_table_columns(db, base_metadata_parts)
     compare_columns = fetch_table_columns(db, compare_metadata_parts)
 
-    source_columns = base_columns if column_source == "base" else compare_columns
-    exceptions = {col.upper() for col in except_columns}
-    selected_columns = [col for col in source_columns if col.upper() not in exceptions]
+    if column_list:
+        # Use provided column list directly
+        selected_columns = column_list
+        logger.info(f"Using provided column list: {selected_columns}")
+    else:
+        # Use existing logic to determine columns
+        source_columns = base_columns if column_source == "base" else compare_columns
+        exceptions = {col.upper() for col in except_columns}
+        selected_columns = [col for col in source_columns if col.upper() not in exceptions]
 
-    if not selected_columns:
-        raise ValueError("No columns available for comparison after applying exceptions")
+        if not selected_columns:
+            raise ValueError("No columns available for comparison after applying exceptions")
 
     base_column_set = {col.upper() for col in base_columns}
     compare_column_set = {col.upper() for col in compare_columns}
@@ -429,6 +485,27 @@ compare_model AS (
     SELECT {column_list}
     FROM {compare_fqn}
 )"""
+
+    # Sample some rows to estimate size and calculate dynamic limit
+    sample_query = f"""
+{base_cte},
+sample_rows AS (
+    SELECT {column_list}
+    FROM base_model
+    LIMIT 5
+)
+SELECT * FROM sample_rows
+"""
+    
+    try:
+        sample_data, _ = db.execute_query(sample_query)
+        dynamic_limit = calculate_dynamic_limit(sample_data, max_context_chars)
+        # Use the smaller of user-specified limit or dynamic limit
+        effective_limit = min(preview_limit, dynamic_limit)
+        logger.info(f"Row size estimation: using {effective_limit} rows (user limit: {preview_limit}, dynamic limit: {dynamic_limit})")
+    except Exception as e:
+        logger.warning(f"Failed to estimate row size, using user-specified limit: {e}")
+        effective_limit = preview_limit
 
     stats_query = f"""
 {base_cte},
@@ -490,7 +567,7 @@ UNION ALL
 SELECT *
 FROM diff_base_only
 ORDER BY 1, 2
-LIMIT {preview_limit}
+LIMIT {effective_limit}
 """
 
     stats_data, stats_data_id = db.execute_query(stats_query)
@@ -502,14 +579,17 @@ LIMIT {preview_limit}
         "type": "model_comparison_summary",
         "base_model": base_model,
         "comparing_model": comparing_model,
-        "column_source": column_source,
+        "column_source": column_source if not column_list else None,
         "columns_compared": selected_columns,
-        "except_columns": except_columns,
+        "column_list_provided": bool(column_list),
+        "except_columns": except_columns if not column_list else [],
         "stats_data_id": stats_data_id,
         "statistics": stats_row,
         "differences_data_id": differences_data_id,
         "differences_preview_count": len(differences_data),
-        "differences_preview_limit": preview_limit,
+        "differences_preview_limit": effective_limit,
+        "user_specified_limit": preview_limit,
+        "max_context_chars": max_context_chars,
     }
 
     summary_yaml = data_to_yaml(summary_output)
@@ -520,7 +600,8 @@ LIMIT {preview_limit}
         "base_model": base_model,
         "comparing_model": comparing_model,
         "difference_rows": differences_data,
-        "preview_limit": preview_limit,
+        "preview_limit": effective_limit,
+        "user_specified_limit": preview_limit,
         "preview_count": len(differences_data),
     }
     differences_json = json.dumps(differences_output)
@@ -737,14 +818,26 @@ async def main(
                     },
                     "preview_limit": {
                         "type": "integer",
-                        "description": "Maximum number of differing rows to include in the preview",
+                        "description": "Maximum number of differing rows to include in the preview (may be reduced based on row size)",
                         "default": 30,
                         "minimum": 1,
+                    },
+                    "max_context_chars": {
+                        "type": "integer",
+                        "description": "Maximum number of characters to use for context window (default: 15000)",
+                        "default": 15000,
+                        "minimum": 1000,
+                    },
+                    "column_list": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of specific column names to compare. If provided, only these columns will be compared (ignores column_source and except_columns)",
+                        "default": [],
                     },
                     "except_columns": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Optional list of column names to exclude from the comparison",
+                        "description": "Optional list of column names to exclude from the comparison (ignored if column_list is provided)",
                         "default": [],
                     },
                 },
