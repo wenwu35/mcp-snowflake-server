@@ -7,6 +7,7 @@ import uuid
 from functools import wraps
 from typing import Any, Callable
 import datetime
+from decimal import Decimal
 
 import mcp.server.stdio
 import mcp.types as types
@@ -25,6 +26,26 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger("mcp_snowflake_server")
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime, date, and Timestamp objects"""
+
+    def default(self, obj):
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.isoformat()
+        elif isinstance(obj, Decimal):
+            return float(obj)
+        elif hasattr(obj, "isoformat"):
+            # Handle Snowflake Timestamp and other objects with isoformat method
+            return obj.isoformat()
+        elif hasattr(obj, "strftime"):
+            # Handle other date-like objects
+            try:
+                return obj.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            except Exception:
+                return str(obj)
+        return super().default(obj)
 
 
 def data_to_yaml(data: Any) -> str:
@@ -62,31 +83,35 @@ class SnowflakeDB:
         logger.debug(f"Executing query: {query}")
         try:
             result = self.session.sql(query).to_pandas()
-            
+
             # Convert all timestamp/date columns to ISO format strings for JSON serialization
             for col in result.columns:
-                if result[col].dtype == 'datetime64[ns]':
-                    result[col] = result[col].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-                elif result[col].dtype == 'object':
+                if result[col].dtype == "datetime64[ns]":
+                    result[col] = result[col].dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                elif result[col].dtype == "object":
                     # Handle various timestamp/date types that might be in object columns
                     def convert_timestamp(x):
                         if x is None:
                             return None
                         elif isinstance(x, (datetime.date, datetime.datetime)):
                             return x.isoformat()
-                        elif hasattr(x, 'isoformat'):  # Handle Snowflake Timestamp objects
+                        elif hasattr(x, "isoformat"):  # Handle Snowflake Timestamp objects
                             return x.isoformat()
-                        elif hasattr(x, 'strftime'):  # Handle other date-like objects
+                        elif hasattr(x, "strftime"):  # Handle other date-like objects
                             try:
-                                return x.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+                                return x.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                             except:
                                 return str(x)
                         else:
                             return x
-                    
+
                     result[col] = result[col].apply(convert_timestamp)
-            
+
             result_rows = result.to_dict(orient="records")
+
+            # Deep conversion pass to ensure all nested timestamps are converted
+            result_rows = self._convert_timestamps_deep(result_rows)
+
             data_id = str(uuid.uuid4())
 
             return result_rows, data_id
@@ -94,6 +119,29 @@ class SnowflakeDB:
         except Exception as e:
             logger.error(f'Database error executing "{query}": {e}')
             raise
+
+    def _convert_timestamps_deep(self, data: Any) -> Any:
+        """Recursively convert all timestamp objects to ISO format strings"""
+        if isinstance(data, list):
+            return [self._convert_timestamps_deep(item) for item in data]
+        elif isinstance(data, dict):
+            return {key: self._convert_timestamps_deep(value) for key, value in data.items()}
+        elif isinstance(data, (datetime.datetime, datetime.date)):
+            return data.isoformat()
+        elif hasattr(data, "isoformat"):
+            # Handle Snowflake Timestamp and other timestamp-like objects
+            try:
+                return data.isoformat()
+            except Exception:
+                return str(data)
+        elif hasattr(data, "strftime"):
+            # Handle other date-like objects
+            try:
+                return data.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            except Exception:
+                return str(data)
+        else:
+            return data
 
     def add_insight(self, insight: str) -> None:
         """Add a new insight to the collection"""
@@ -143,9 +191,9 @@ def normalize_identifier_part(part: str) -> tuple[str, str]:
     """Normalize an identifier part and determine the value to use for metadata lookups."""
 
     stripped = part.strip()
-    if stripped.startswith("\"") and stripped.endswith("\"") and len(stripped) >= 2:
+    if stripped.startswith('"') and stripped.endswith('"') and len(stripped) >= 2:
         # Remove surrounding quotes and unescape any embedded quotes
-        unquoted = stripped[1:-1].replace("\"\"", "\"")
+        unquoted = stripped[1:-1].replace('""', '"')
         return unquoted, unquoted
     return stripped, stripped.upper()
 
@@ -213,7 +261,7 @@ async def handle_list_databases(arguments, db, *_, exclusion_config=None):
         "data": data,
     }
     yaml_output = data_to_yaml(output)
-    json_output = json.dumps(output)
+    json_output = json.dumps(output, cls=DateTimeEncoder)
     return [
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
@@ -254,7 +302,7 @@ async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
         "data": data,
     }
     yaml_output = data_to_yaml(output)
-    json_output = json.dumps(output)
+    json_output = json.dumps(output, cls=DateTimeEncoder)
     return [
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
@@ -302,7 +350,7 @@ async def handle_list_tables(arguments, db, *_, exclusion_config=None):
         "data": data,
     }
     yaml_output = data_to_yaml(output)
-    json_output = json.dumps(output)
+    json_output = json.dumps(output, cls=DateTimeEncoder)
     return [
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
@@ -345,7 +393,7 @@ async def handle_describe_table(arguments, db, *_):
         "data": data,
     }
     yaml_output = data_to_yaml(output)
-    json_output = json.dumps(output)
+    json_output = json.dumps(output, cls=DateTimeEncoder)
     return [
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
@@ -378,16 +426,16 @@ def calculate_dynamic_limit(sample_rows: list[dict], max_context_chars: int = 15
     """Calculate dynamic row limit based on estimated row sizes."""
     if not sample_rows:
         return 30  # Default fallback
-    
+
     # Calculate average row size from sample
     total_size = sum(estimate_row_size(row) for row in sample_rows)
     avg_row_size = total_size / len(sample_rows)
-    
+
     # Calculate how many rows can fit in the context limit
     # Reserve some space for metadata and formatting
     available_chars = max_context_chars * 0.8  # Use 80% of limit for data
     dynamic_limit = max(1, int(available_chars / avg_row_size))
-    
+
     # Apply reasonable bounds
     return min(max(dynamic_limit, 1), 100)  # Between 1 and 100 rows
 
@@ -496,13 +544,15 @@ sample_rows AS (
 )
 SELECT * FROM sample_rows
 """
-    
+
     try:
         sample_data, _ = db.execute_query(sample_query)
         dynamic_limit = calculate_dynamic_limit(sample_data, max_context_chars)
         # Use the smaller of user-specified limit or dynamic limit
         effective_limit = min(preview_limit, dynamic_limit)
-        logger.info(f"Row size estimation: using {effective_limit} rows (user limit: {preview_limit}, dynamic limit: {dynamic_limit})")
+        logger.info(
+            f"Row size estimation: using {effective_limit} rows (user limit: {preview_limit}, dynamic limit: {dynamic_limit})"
+        )
     except Exception as e:
         logger.warning(f"Failed to estimate row size, using user-specified limit: {e}")
         effective_limit = preview_limit
@@ -593,7 +643,7 @@ LIMIT {effective_limit}
     }
 
     summary_yaml = data_to_yaml(summary_output)
-    summary_json = json.dumps(summary_output)
+    summary_json = json.dumps(summary_output, cls=DateTimeEncoder)
     differences_output = {
         "type": "model_comparison_differences",
         "data_id": differences_data_id,
@@ -604,7 +654,7 @@ LIMIT {effective_limit}
         "user_specified_limit": preview_limit,
         "preview_count": len(differences_data),
     }
-    differences_json = json.dumps(differences_output)
+    differences_json = json.dumps(differences_output, cls=DateTimeEncoder)
 
     return [
         types.TextContent(type="text", text=summary_yaml),
@@ -641,7 +691,7 @@ async def handle_read_query(arguments, db, write_detector, *_):
         "data": data,
     }
     yaml_output = data_to_yaml(output)
-    json_output = json.dumps(output)
+    json_output = json.dumps(output, cls=DateTimeEncoder)
     return [
         types.TextContent(type="text", text=yaml_output),
         types.EmbeddedResource(
